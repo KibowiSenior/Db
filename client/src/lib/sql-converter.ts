@@ -36,31 +36,79 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     optimizationsCount: 0
   };
 
-  // Replace MySQL 8.0 collations with MariaDB 10.3 compatible equivalents
+  // Replace MySQL 8.0+ collations with MariaDB 10.3 compatible equivalents - COMPLETE MAPPING
   const mysqlCollationMap = {
+    // MySQL 8.0 utf8mb4 collations
     'utf8mb4_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_0900_as_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_0900_as_ci': 'utf8mb4_unicode_ci', 
     'utf8mb4_0900_as_cs': 'utf8mb4_unicode_ci',
     'utf8mb4_0900_bin': 'utf8mb4_bin',
+    // Additional MySQL 8.0+ collations missing from original
+    'utf8mb4_cs_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_cs_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_da_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_da_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_de_pb_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_de_pb_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_eo_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_eo_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_es_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_es_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_es_trad_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_es_trad_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_et_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_et_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_hr_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_hr_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_hu_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_hu_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_is_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_is_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_ja_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_ja_0900_as_cs_ks': 'utf8mb4_unicode_ci',
+    'utf8mb4_la_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_la_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_lt_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_lt_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_lv_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_lv_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_pl_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_pl_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_ro_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_ro_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_ru_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_ru_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_sk_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_sk_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_sl_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_sl_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_sv_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_sv_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_tr_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_tr_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_vi_0900_ai_ci': 'utf8mb4_unicode_ci',
+    'utf8mb4_vi_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_zh_0900_as_cs': 'utf8mb4_unicode_ci',
+    // UTF8 MySQL 8.0 collations (also convert to utf8mb4)
     'utf8_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8_0900_as_ci': 'utf8mb4_unicode_ci'
+    'utf8_0900_as_ci': 'utf8mb4_unicode_ci',
+    'utf8_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8_0900_bin': 'utf8mb4_bin'
   };
 
   Object.entries(mysqlCollationMap).forEach(([mysqlCollation, mariadbCollation]) => {
     const regex = new RegExp(`\\b${mysqlCollation}\\b`, 'gi');
     convertedSQL = convertedSQL.replace(regex, (match) => {
       const lineNumber = getLineNumber(sqlContent, match);
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
         issueType: "warning",
         category: "compatibility",
-        description: `Replaced MySQL 8.0 collation ${match} with MariaDB 10.3 compatible ${mariadbCollation}`,
+        description: `Replaced MySQL 8.0+ collation ${match} with MariaDB 10.3 compatible ${mariadbCollation}`,
         originalText: match,
         convertedText: mariadbCollation,
         autoFixed: true
       });
-      stats.warningsCount++;
-      stats.autoFixed++;
       return mariadbCollation;
     });
   });
@@ -71,7 +119,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     (match) => {
       const lineNumber = getLineNumber(sqlContent, match);
       const replacement = 'SET NAMES utf8mb4';
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
         issueType: "warning",
         category: "compatibility",
@@ -80,8 +128,6 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
         convertedText: replacement,
         autoFixed: true
       });
-      stats.warningsCount++;
-      stats.autoFixed++;
       return replacement;
     }
   );
@@ -91,7 +137,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     /DEFINER\s*=\s*[^@]*@[^\s]*\s+/gi,
     (match) => {
       const lineNumber = getLineNumber(sqlContent, match);
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
         issueType: "warning",
         category: "compatibility",
@@ -100,8 +146,6 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
         convertedText: "-- Removed DEFINER",
         autoFixed: true
       });
-      stats.warningsCount++;
-      stats.autoFixed++;
       return '';
     }
   );
@@ -111,7 +155,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     /-- Dumping\s+(structure|data)\s+for\s+table[^\n]*\n/gi,
     (match) => {
       const lineNumber = getLineNumber(sqlContent, match);
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
         issueType: "info",
         category: "compatibility",
@@ -120,23 +164,33 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
         convertedText: "-- Table structure cleaned",
         autoFixed: true
       });
-      stats.optimizationsCount++;
-      stats.autoFixed++;
       return "";
     }
   );
 
   // Handle MySQL version-specific comments safely (preserve essential objects)
   convertedSQL = convertedSQL.replace(
-    /\/\*!(\d+)\s+([^*]+)\*\//g,
+    /\/\*!(\d+)\s+([\s\S]*?)\*\//g,
     (match, version, content, offset) => {
       const lineNumber = getLineNumber(sqlContent, match);
       
-      // Remove only known problematic content, preserve everything else
+      // Only remove known problematic optimizer hints, preserve everything else
       const trimmedContent = content.trim();
-      // Only remove optimizer hints and problematic settings
-      if (trimmedContent.match(/^(@@|SET\s+@@|USE_INDEX|FORCE_INDEX|IGNORE_INDEX)/i)) {
-        issues.push({
+      
+      // Explicit deny list for problematic MySQL-specific hints
+      const problematicHints = [
+        /^@@/i,
+        /^SET\s+@@/i,
+        /USE_INDEX/i,
+        /FORCE_INDEX/i,
+        /IGNORE_INDEX/i,
+        /SQL_CALC_FOUND_ROWS/i
+      ];
+      
+      const isProblematic = problematicHints.some(pattern => pattern.test(trimmedContent));
+      
+      if (isProblematic) {
+        addIssue(issues, stats, {
           lineNumber,
           issueType: "warning",
           category: "compatibility",
@@ -145,46 +199,36 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
           convertedText: "-- Removed problematic hint",
           autoFixed: true
         });
-        stats.warningsCount++;
-        stats.autoFixed++;
         return "";
       } else {
-        // Preserve all other content (TRIGGERS, PROCEDURES, VIEWS, etc.)
-        issues.push({
+        // Preserve conditional semantics for compatibility
+        addIssue(issues, stats, {
           lineNumber,
           issueType: "info",
           category: "compatibility",
-          description: "Unwrapped MySQL version comment to preserve valid statement/object",
+          description: "MySQL version comment preserved with conditional semantics for compatibility",
           originalText: match,
-          convertedText: trimmedContent,
-          autoFixed: true
+          autoFixed: false
         });
-        stats.optimizationsCount++;
-        stats.autoFixed++;
-        return trimmedContent;
+        return match; // Keep original with version check
       }
     }
   );
 
-  // Convert CREATE TABLE IF NOT EXISTS to proper DROP + CREATE format (handle schema-qualified names)
+  // Keep CREATE TABLE IF NOT EXISTS intact - MariaDB 10.3 supports this syntax
   convertedSQL = convertedSQL.replace(
     /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+((?:`[^`]+`\.)?`[^`]+`|\w+)/gi,
     (match, tableName) => {
       const lineNumber = getLineNumber(sqlContent, match);
-      // Preserve the full table name including schema if present
-      const replacement = `DROP TABLE IF EXISTS ${tableName};\nCREATE TABLE ${tableName}`;
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
-        issueType: "warning",
+        issueType: "info",
         category: "compatibility",
-        description: "Converted CREATE TABLE IF NOT EXISTS to DROP + CREATE for better MariaDB compatibility (preserved schema)",
+        description: "CREATE TABLE IF NOT EXISTS is supported in MariaDB 10.3 - keeping original syntax for data safety",
         originalText: match,
-        convertedText: replacement,
-        autoFixed: true
+        autoFixed: false
       });
-      stats.warningsCount++;
-      stats.autoFixed++;
-      return replacement;
+      return match; // Keep original - data safe
     }
   );
 
@@ -370,7 +414,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     (match, charset) => {
       const lineNumber = getLineNumber(sqlContent, match);
       const replacement = `CHARACTER SET=${charset}`;
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
         issueType: "warning",
         category: "syntax",
@@ -379,8 +423,6 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
         convertedText: replacement,
         autoFixed: true
       });
-      stats.warningsCount++;
-      stats.autoFixed++;
       return replacement;
     }
   );
@@ -390,7 +432,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     /ENGINE\s*=\s*InnoDB/gi,
     (match) => {
       const lineNumber = getLineNumber(sqlContent, match);
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
         issueType: "info",
         category: "compatibility",
@@ -399,8 +441,6 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
         convertedText: match,
         autoFixed: true
       });
-      stats.optimizationsCount++;
-      stats.autoFixed++;
       return match;
     }
   );
@@ -413,7 +453,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
       // For common sizes, we can optimize
       if (size === "11") {
         const replacement = "int";
-        issues.push({
+        addIssue(issues, stats, {
           lineNumber,
           issueType: "info",
           category: "optimization",
@@ -422,26 +462,208 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
           convertedText: replacement,
           autoFixed: true
         });
-        stats.optimizationsCount++;
-        stats.autoFixed++;
         return replacement;
       }
       return match;
     }
   );
 
-  // Check for potential JSON column types that might need attention
+  // ============ ADVANCED MySQL 8.0+ FEATURES CONVERSION ============
+  
+  // Handle MySQL 8.0 CTE (Common Table Expressions) - MariaDB 10.3 has limited support
+  convertedSQL = convertedSQL.replace(
+    /\bWITH\s+(RECURSIVE\s+)?([\w`]+)\s*\([^)]*\)\s*AS\s*\(/gi,
+    (match, recursive, cteName) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      addIssue(issues, stats, {
+        lineNumber,
+        issueType: "warning",
+        category: "compatibility",
+        description: `CTE (Common Table Expression) detected${recursive ? ' with RECURSIVE' : ''} - MariaDB 10.3 has limited CTE support compared to MySQL 8.0. Verify compatibility.`,
+        originalText: match.trim(),
+        autoFixed: false
+      });
+      return match; // Keep as-is but warn user
+    }
+  );
+  
+  // Handle MySQL 8.0 Window Functions - check for compatibility
+  const windowFunctions = ['ROW_NUMBER', 'RANK', 'DENSE_RANK', 'PERCENT_RANK', 'CUME_DIST', 'NTILE', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE', 'NTH_VALUE'];
+  windowFunctions.forEach(func => {
+    const regex = new RegExp(`\\b${func}\\s*\\(.*?\\)\\s+OVER\\s*\\(`, 'gi');
+    convertedSQL = convertedSQL.replace(regex, (match) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      addIssue(issues, stats, {
+        lineNumber,
+        issueType: "info",
+        category: "compatibility",
+        description: `Window function ${func} detected - verify MariaDB 10.3 supports the specific syntax used`,
+        originalText: match.trim(),
+        autoFixed: false
+      });
+      return match;
+    });
+  });
+  
+  // Handle MySQL 8.0 Generated/Computed Columns - Detect but don't auto-convert due to complexity
   lines.forEach((line, index) => {
-    if (line.toLowerCase().includes('json') && !line.trim().startsWith('--')) {
-      issues.push({
+    if (/\bAS\s*\([^)]*\)\s+(VIRTUAL|STORED)\b/gi.test(line) && !line.trim().startsWith('--')) {
+      addIssue(issues, stats, {
         lineNumber: index + 1,
         issueType: "warning",
         category: "compatibility",
-        description: "JSON column type detected - verify MariaDB 10.3 JSON support meets your requirements",
+        description: "Generated/computed column detected - verify MariaDB 10.3 syntax compatibility manually",
         originalText: line.trim(),
         autoFixed: false
       });
-      stats.warningsCount++;
+    }
+  });
+  
+  // Handle MySQL 8.0 Invisible Columns - NOT supported in MariaDB 10.3
+  convertedSQL = convertedSQL.replace(
+    /(`[^`]+`)\s+([^,)]+)\s+INVISIBLE\b/gi,
+    (match, columnName, columnDef) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      const replacement = `${columnName} ${columnDef} -- INVISIBLE not supported in MariaDB 10.3`;
+      addIssue(issues, stats, {
+        lineNumber,
+        issueType: "error",
+        category: "compatibility",
+        description: "INVISIBLE column attribute removed - not supported in MariaDB 10.3. Column will be visible.",
+        originalText: match,
+        convertedText: replacement,
+        autoFixed: true
+      });
+      return replacement;
+    }
+  );
+  
+  // Handle MySQL 8.0 CHECK constraints syntax
+  convertedSQL = convertedSQL.replace(
+    /CONSTRAINT\s+([\w`]+)\s+CHECK\s*\(([^)]+)\)/gi,
+    (match, constraintName, checkExpression) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      addIssue(issues, stats, {
+        lineNumber,
+        issueType: "info",
+        category: "compatibility",
+        description: "CHECK constraint detected - MariaDB 10.3 supports CHECK constraints with some limitations",
+        originalText: match,
+        autoFixed: false
+      });
+      return match;
+    }
+  );
+  
+  // Handle MySQL 8.0 JSON functions and operators
+  const jsonFunctions = ['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_SET', 'JSON_INSERT', 'JSON_REPLACE', 'JSON_REMOVE', 'JSON_ARRAY', 'JSON_OBJECT', 'JSON_ARRAYAGG', 'JSON_OBJECTAGG'];
+  jsonFunctions.forEach(func => {
+    const regex = new RegExp(`\\b${func}\\s*\\(`, 'gi');
+    convertedSQL = convertedSQL.replace(regex, (match) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      addIssue(issues, stats, {
+        lineNumber,
+        issueType: "warning",
+        category: "compatibility",
+        description: `JSON function ${func} detected - verify MariaDB 10.3 JSON function compatibility`,
+        originalText: match.trim(),
+        autoFixed: false
+      });
+      return match;
+    });
+  });
+  
+  // Convert MySQL 8.0 JSON operators to MariaDB 10.3 compatible functions
+  convertedSQL = convertedSQL.replace(
+    /([\w`\.]+)\s*(->>?)\s*(["'][^"']*["']|\$\.[\w\[\]"'\.$]+)/gi,
+    (match, column, operator, path) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      let replacement: string;
+      
+      if (operator === '->') {
+        // Convert -> to JSON_EXTRACT
+        replacement = `JSON_EXTRACT(${column}, ${path})`;
+      } else if (operator === '->>') {
+        // Convert ->> to JSON_UNQUOTE(JSON_EXTRACT)
+        replacement = `JSON_UNQUOTE(JSON_EXTRACT(${column}, ${path}))`;
+      } else {
+        // Fallback for unexpected operators
+        replacement = match;
+      }
+      
+      addIssue(issues, stats, {
+        lineNumber,
+        issueType: "warning",
+        category: "compatibility",
+        description: `Converted JSON operator ${operator} to MariaDB 10.3 compatible function`,
+        originalText: match,
+        convertedText: replacement,
+        autoFixed: true
+      });
+      return replacement;
+    }
+  );
+  
+  // Handle FULLTEXT indexes - syntax differences
+  convertedSQL = convertedSQL.replace(
+    /FULLTEXT\s+(INDEX|KEY)\s+([\w`]+)?\s*\(([^)]+)\)(?:\s+WITH\s+PARSER\s+(\w+))?/gi,
+    (match, indexType, indexName, columns, parser) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      if (parser && parser.toLowerCase() !== 'ngram') {
+        const replacement = `FULLTEXT ${indexType} ${indexName || ''} (${columns}) -- Parser ${parser} may not be available`;
+        addIssue(issues, stats, {
+          lineNumber,
+          issueType: "warning",
+          category: "compatibility",
+          description: `FULLTEXT index parser ${parser} may not be available in MariaDB 10.3`,
+          originalText: match,
+          convertedText: replacement,
+          autoFixed: true
+        });
+        return replacement;
+      }
+      addIssue(issues, stats, {
+        lineNumber,
+        issueType: "info",
+        category: "compatibility",
+        description: "FULLTEXT index syntax is compatible with MariaDB 10.3",
+        originalText: match,
+        autoFixed: false
+      });
+      return match;
+    }
+  );
+  
+  // Handle MySQL 8.0 partitioning syntax differences
+  convertedSQL = convertedSQL.replace(
+    /PARTITION\s+BY\s+(RANGE|LIST|HASH|KEY)\s*\(([^)]+)\)(?:\s+PARTITIONS\s+(\d+))?/gi,
+    (match, partitionType, expression, partitionCount) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      addIssue(issues, stats, {
+        lineNumber,
+        issueType: "info",
+        category: "compatibility",
+        description: `Table partitioning (${partitionType}) detected - verify MariaDB 10.3 partitioning compatibility`,
+        originalText: match,
+        autoFixed: false
+      });
+      return match;
+    }
+  );
+  
+  // ============ END ADVANCED FEATURES ============
+  
+  // Enhanced JSON column detection with comprehensive handling
+  lines.forEach((line, index) => {
+    if (line.toLowerCase().includes('json') && !line.trim().startsWith('--')) {
+      addIssue(issues, stats, {
+        lineNumber: index + 1,
+        issueType: "warning",
+        category: "compatibility",
+        description: "JSON column type detected - MariaDB 10.3 JSON support is functional but may have differences from MySQL 8.0",
+        originalText: line.trim(),
+        autoFixed: false
+      });
     }
   });
 
@@ -450,7 +672,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     /AUTO_INCREMENT\s*=\s*(\d+)/gi,
     (match, value) => {
       const lineNumber = getLineNumber(sqlContent, match);
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
         issueType: "info",
         category: "compatibility",
@@ -459,8 +681,6 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
         convertedText: match,
         autoFixed: true
       });
-      stats.optimizationsCount++;
-      stats.autoFixed++;
       return match;
     }
   );
@@ -613,7 +833,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     (match) => {
       const lineNumber = getLineNumber(sqlContent, match);
       const replacement = "CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci";
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
         issueType: "warning",
         category: "compatibility",
@@ -622,8 +842,6 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
         convertedText: replacement,
         autoFixed: true
       });
-      stats.warningsCount++;
-      stats.autoFixed++;
       return replacement;
     }
   );
@@ -634,7 +852,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     (match) => {
       const lineNumber = getLineNumber(sqlContent, match);
       const replacement = "DEFAULT CHARSET=utf8mb4";
-      issues.push({
+      addIssue(issues, stats, {
         lineNumber,
         issueType: "warning",
         category: "compatibility",
@@ -643,11 +861,74 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
         convertedText: replacement,
         autoFixed: true
       });
-      stats.warningsCount++;
-      stats.autoFixed++;
       return replacement;
     }
   );
+  
+  // ============ CRITICAL UTF8MB4 INDEX LENGTH SAFEGUARDS ============
+  // Detect and fix potential index length issues when converting to utf8mb4
+  
+  // Check for VARCHAR columns in indexes that may exceed utf8mb4 key length limits
+  convertedSQL = convertedSQL.replace(
+    /(KEY|INDEX)\s+([\w`]*)?\s*\(([^)]+)\)/gi,
+    (match, indexType, indexName, columns, offset, str) => {
+      // Only check within CREATE TABLE contexts
+      const beforeMatch = str.substring(Math.max(0, offset - 500), offset);
+      if (!/CREATE\s+TABLE/i.test(beforeMatch)) {
+        return match;
+      }
+      
+      const lineNumber = getLineNumber(sqlContent, match);
+      
+      // Check for large VARCHAR columns that might cause issues with utf8mb4
+      const hasProblematicVarchar = /varchar\s*\(\s*([2-9]\d{2}|[1-9]\d{3,})\s*\)/i.test(columns);
+      
+      if (hasProblematicVarchar) {
+        // Don't auto-modify indexes, but warn about potential issues
+        addIssue(issues, stats, {
+          lineNumber,
+          issueType: "error",
+          category: "compatibility",
+          description: "INDEX on large VARCHAR detected - may exceed MariaDB 10.3 key length limits with utf8mb4. Consider adding ROW_FORMAT=DYNAMIC or index prefixes.",
+          originalText: match,
+          autoFixed: false
+        });
+      }
+      
+      return match;
+    }
+  );
+  
+  // Check for tables that might need ROW_FORMAT=DYNAMIC for utf8mb4 compatibility
+  convertedSQL = convertedSQL.replace(
+    /(CREATE\s+TABLE\s+[\w`\.]+\s*\([^;]+)\)\s*(ENGINE\s*=\s*InnoDB)([^;]*);/gi,
+    (match, tableStart, engine, tableEnd, offset, str) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      
+      // Check if table has large VARCHAR columns and utf8mb4
+      const hasUtf8mb4 = /utf8mb4/i.test(match);
+      const hasLargeVarchar = /varchar\s*\(\s*([2-9]\d{2}|[1-9]\d{3,})\s*\)/i.test(match);
+      const hasRowFormat = /ROW_FORMAT\s*=/i.test(match);
+      
+      if (hasUtf8mb4 && hasLargeVarchar && !hasRowFormat) {
+        const replacement = `${tableStart}) ${engine} ROW_FORMAT=DYNAMIC${tableEnd};`;
+        addIssue(issues, stats, {
+          lineNumber,
+          issueType: "warning",
+          category: "compatibility",
+          description: "Added ROW_FORMAT=DYNAMIC for utf8mb4 compatibility with large VARCHAR columns",
+          originalText: match,
+          convertedText: replacement,
+          autoFixed: true
+        });
+        return replacement;
+      }
+      
+      return match;
+    }
+  );
+  
+  // ============ END UTF8MB4 SAFEGUARDS ============
 
   // Handle JSON column data to ensure proper encoding (preserve all constraints)
   convertedSQL = convertedSQL.replace(
@@ -822,6 +1103,32 @@ SET time_zone = "+00:00";
 }
 
 function getLineNumber(content: string, searchText: string): number {
-  const beforeMatch = content.substring(0, content.indexOf(searchText));
+  // Handle multi-occurrence patterns by finding first occurrence
+  const index = content.indexOf(searchText);
+  if (index === -1) {
+    return 1; // Default to line 1 if not found
+  }
+  const beforeMatch = content.substring(0, index);
   return beforeMatch.split('\n').length;
+}
+
+// Helper function to add issue and update stats consistently
+function addIssue(issues: ConversionIssue[], stats: ConversionStats, issue: ConversionIssue): void {
+  issues.push(issue);
+  
+  if (issue.autoFixed) {
+    stats.autoFixed++;
+  }
+  
+  switch (issue.issueType) {
+    case 'warning':
+      stats.warningsCount++;
+      break;
+    case 'error':
+      stats.errorsCount++;
+      break;
+    case 'info':
+      stats.optimizationsCount++;
+      break;
+  }
 }
