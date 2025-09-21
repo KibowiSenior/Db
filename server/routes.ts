@@ -78,16 +78,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Update job with converted content and completion status
-      const updatedJob = await storage.updateConversionJob(jobId, {
+      await storage.updateConversionJob(jobId, {
         status: "completed",
         convertedContent: conversionResult.convertedSQL,
         completedAt: new Date()
-      });
-
-      console.log(`Job ${jobId} updated to completed status:`, {
-        jobStatus: updatedJob?.status,
-        hasConvertedContent: !!updatedJob?.convertedContent,
-        completedAt: updatedJob?.completedAt
       });
 
       res.json({ 
@@ -114,12 +108,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const issues = await storage.getConversionIssues(jobId);
       const stats = await storage.getConversionStats(jobId);
 
-      console.log(`Getting job ${jobId}:`, {
-        status: job.status,
-        hasConvertedContent: !!job.convertedContent,
-        completedAt: job.completedAt
-      });
-
       res.json({
         job,
         issues,
@@ -141,7 +129,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Converted file not found" });
       }
 
-      const fileName = job.fileName.replace(/\.[^/.]+$/, "") + "_mariadb103.sql";
+      // Sanitize filename to prevent header injection
+      const sanitizedName = job.fileName
+        .replace(/[^\w\-. ]/g, "") // Remove special chars except dash, dot, space
+        .replace(/\.[^/.]+$/, "") // Remove extension
+        .trim() || "converted"; // Fallback to 'converted' if empty
+      
+      const fileName = sanitizedName + "_mariadb103.sql";
       
       res.set({
         'Content-Type': 'application/sql',
