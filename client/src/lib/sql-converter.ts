@@ -106,6 +106,130 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     }
   );
 
+  // Remove HeidiSQL-style dump comments that can cause issues
+  convertedSQL = convertedSQL.replace(
+    /-- Dumping\s+(structure|data)\s+for\s+table[^\n]*\n/gi,
+    (match) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      issues.push({
+        lineNumber,
+        issueType: "info",
+        category: "compatibility",
+        description: "Removed HeidiSQL dump comment for cleaner structure",
+        originalText: match.trim(),
+        convertedText: "-- Table structure cleaned",
+        autoFixed: true
+      });
+      stats.optimizationsCount++;
+      stats.autoFixed++;
+      return "";
+    }
+  );
+
+  // Remove MySQL version-specific comments that cause import issues
+  convertedSQL = convertedSQL.replace(
+    /\/\*!(\d+)\s+([^*]+)\*\//g,
+    (match, version, content) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      issues.push({
+        lineNumber,
+        issueType: "warning",
+        category: "compatibility",
+        description: "Removed MySQL version-specific comment that can cause import issues",
+        originalText: match,
+        convertedText: content.trim(),
+        autoFixed: true
+      });
+      stats.warningsCount++;
+      stats.autoFixed++;
+      return "";
+    }
+  );
+
+  // Convert CREATE TABLE IF NOT EXISTS to proper DROP + CREATE format
+  convertedSQL = convertedSQL.replace(
+    /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([`\w]+)/gi,
+    (match, tableName) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      const cleanTableName = tableName.replace(/[`'"]/g, '');
+      const replacement = `DROP TABLE IF EXISTS \`${cleanTableName}\`;\nCREATE TABLE \`${cleanTableName}\``;
+      issues.push({
+        lineNumber,
+        issueType: "warning",
+        category: "compatibility",
+        description: "Converted CREATE TABLE IF NOT EXISTS to DROP + CREATE for better MariaDB compatibility",
+        originalText: match,
+        convertedText: replacement,
+        autoFixed: true
+      });
+      stats.warningsCount++;
+      stats.autoFixed++;
+      return replacement;
+    }
+  );
+
+  // Convert INSERT IGNORE INTO to INSERT INTO (safer for MariaDB)
+  convertedSQL = convertedSQL.replace(
+    /INSERT\s+IGNORE\s+INTO/gi,
+    (match) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      const replacement = "INSERT INTO";
+      issues.push({
+        lineNumber,
+        issueType: "info",
+        category: "compatibility",
+        description: "Converted INSERT IGNORE INTO to INSERT INTO for MariaDB compatibility",
+        originalText: match,
+        convertedText: replacement,
+        autoFixed: true
+      });
+      stats.optimizationsCount++;
+      stats.autoFixed++;
+      return replacement;
+    }
+  );
+
+  // Fix latin1_swedish_ci character set issues
+  convertedSQL = convertedSQL.replace(
+    /CHARSET=latin1\s+COLLATE=latin1_swedish_ci/gi,
+    (match) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      const replacement = "CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci";
+      issues.push({
+        lineNumber,
+        issueType: "warning",
+        category: "compatibility",
+        description: "Converted latin1_swedish_ci to utf8mb4_general_ci for better MariaDB compatibility",
+        originalText: match,
+        convertedText: replacement,
+        autoFixed: true
+      });
+      stats.warningsCount++;
+      stats.autoFixed++;
+      return replacement;
+    }
+  );
+
+  // Remove USING BTREE index hints that can cause issues
+  convertedSQL = convertedSQL.replace(
+    /\s+USING\s+BTREE/gi,
+    (match) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      issues.push({
+        lineNumber,
+        issueType: "info",
+        category: "compatibility",
+        description: "Removed USING BTREE index hint for MariaDB compatibility",
+        originalText: match.trim(),
+        convertedText: "-- Removed index hint",
+        autoFixed: true
+      });
+      stats.optimizationsCount++;
+      stats.autoFixed++;
+      return "";
+    }
+  );
+
   // Remove MySQL-specific system variable settings that don't exist in MariaDB
   convertedSQL = convertedSQL.replace(
     /SET\s+@@global\.local_infile\s*=\s*[^;]+;?\s*/gi,
@@ -500,6 +624,53 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
       return replacement;
     }
   );
+
+  // Clean up extra whitespace and empty lines
+  convertedSQL = convertedSQL.replace(/\n\s*\n\s*\n/g, '\n\n'); // Remove triple+ newlines
+  convertedSQL = convertedSQL.replace(/^\s*\n/gm, ''); // Remove empty lines at start
+  
+  // Ensure proper SQL file header for MariaDB compatibility
+  if (!convertedSQL.includes('SET NAMES utf8mb4')) {
+    const header = `-- MariaDB 10.3 Compatible SQL Export
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+SET AUTOCOMMIT = 0;
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+`;
+    convertedSQL = header + convertedSQL;
+    
+    issues.push({
+      lineNumber: 1,
+      issueType: "info",
+      category: "optimization",
+      description: "Added MariaDB-compatible SQL header for proper import",
+      originalText: "-- File beginning",
+      convertedText: "-- MariaDB header added",
+      autoFixed: true
+    });
+    stats.optimizationsCount++;
+    stats.autoFixed++;
+  }
+
+  // Add COMMIT at the end if not present
+  if (!convertedSQL.toLowerCase().includes('commit')) {
+    convertedSQL += '\n\nCOMMIT;\n';
+    
+    issues.push({
+      lineNumber: convertedSQL.split('\n').length,
+      issueType: "info",
+      category: "optimization",
+      description: "Added COMMIT statement at end of file for transaction safety",
+      originalText: "-- File end",
+      convertedText: "COMMIT;",
+      autoFixed: true
+    });
+    stats.optimizationsCount++;
+    stats.autoFixed++;
+  }
 
   // Calculate final statistics
   stats.totalIssues = issues.length;
