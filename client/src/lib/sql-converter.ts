@@ -126,38 +126,58 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     }
   );
 
-  // Remove MySQL version-specific comments that cause import issues
+  // Handle MySQL version-specific comments safely (preserve essential objects)
   convertedSQL = convertedSQL.replace(
     /\/\*!(\d+)\s+([^*]+)\*\//g,
-    (match, version, content) => {
+    (match, version, content, offset) => {
       const lineNumber = getLineNumber(sqlContent, match);
-      issues.push({
-        lineNumber,
-        issueType: "warning",
-        category: "compatibility",
-        description: "Removed MySQL version-specific comment that can cause import issues",
-        originalText: match,
-        convertedText: content.trim(),
-        autoFixed: true
-      });
-      stats.warningsCount++;
-      stats.autoFixed++;
-      return "";
+      
+      // Remove only known problematic content, preserve everything else
+      const trimmedContent = content.trim();
+      // Only remove optimizer hints and problematic settings
+      if (trimmedContent.match(/^(@@|SET\s+@@|USE_INDEX|FORCE_INDEX|IGNORE_INDEX)/i)) {
+        issues.push({
+          lineNumber,
+          issueType: "warning",
+          category: "compatibility",
+          description: "Removed problematic MySQL-specific optimizer hint or setting",
+          originalText: match,
+          convertedText: "-- Removed problematic hint",
+          autoFixed: true
+        });
+        stats.warningsCount++;
+        stats.autoFixed++;
+        return "";
+      } else {
+        // Preserve all other content (TRIGGERS, PROCEDURES, VIEWS, etc.)
+        issues.push({
+          lineNumber,
+          issueType: "info",
+          category: "compatibility",
+          description: "Unwrapped MySQL version comment to preserve valid statement/object",
+          originalText: match,
+          convertedText: trimmedContent,
+          autoFixed: true
+        });
+        stats.optimizationsCount++;
+        stats.autoFixed++;
+        return trimmedContent;
+      }
     }
   );
 
-  // Convert CREATE TABLE IF NOT EXISTS to proper DROP + CREATE format
+  // Convert CREATE TABLE IF NOT EXISTS to proper DROP + CREATE format (handle schema-qualified names)
   convertedSQL = convertedSQL.replace(
-    /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([`\w]+)/gi,
+    /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+((?:`[^`]+`\.)?`[^`]+`|\w+)/gi,
     (match, tableName) => {
       const lineNumber = getLineNumber(sqlContent, match);
-      const cleanTableName = tableName.replace(/[`'"]/g, '');
-      const replacement = `DROP TABLE IF EXISTS \`${cleanTableName}\`;\nCREATE TABLE \`${cleanTableName}\``;
+      // Preserve the full table name including schema if present
+      const replacement = `DROP TABLE IF EXISTS ${tableName};\nCREATE TABLE ${tableName}`;
       issues.push({
         lineNumber,
         issueType: "warning",
         category: "compatibility",
-        description: "Converted CREATE TABLE IF NOT EXISTS to DROP + CREATE for better MariaDB compatibility",
+        description: "Converted CREATE TABLE IF NOT EXISTS to DROP + CREATE for better MariaDB compatibility (preserved schema)",
         originalText: match,
         convertedText: replacement,
         autoFixed: true
@@ -168,26 +188,8 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     }
   );
 
-  // Convert INSERT IGNORE INTO to INSERT INTO (safer for MariaDB)
-  convertedSQL = convertedSQL.replace(
-    /INSERT\s+IGNORE\s+INTO/gi,
-    (match) => {
-      const lineNumber = getLineNumber(sqlContent, match);
-      const replacement = "INSERT INTO";
-      issues.push({
-        lineNumber,
-        issueType: "info",
-        category: "compatibility",
-        description: "Converted INSERT IGNORE INTO to INSERT INTO for MariaDB compatibility",
-        originalText: match,
-        convertedText: replacement,
-        autoFixed: true
-      });
-      stats.optimizationsCount++;
-      stats.autoFixed++;
-      return replacement;
-    }
-  );
+  // Keep INSERT IGNORE INTO as is for data safety (prevents import failures on duplicates)
+  // Note: INSERT IGNORE is safer for imports as it won't stop on duplicate keys
 
   // Fix latin1_swedish_ci character set issues
   convertedSQL = convertedSQL.replace(
@@ -339,25 +341,7 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     }
   );
 
-  // Convert MySQL version comments
-  convertedSQL = convertedSQL.replace(
-    /\/\*!(\d+)\s+([^*]+)\*\//g,
-    (match, version, content) => {
-      const lineNumber = getLineNumber(sqlContent, match);
-      issues.push({
-        lineNumber,
-        issueType: "warning",
-        category: "syntax",
-        description: "Converted MySQL version-specific comment to MariaDB compatible format",
-        originalText: match,
-        convertedText: content.trim(),
-        autoFixed: true
-      });
-      stats.warningsCount++;
-      stats.autoFixed++;
-      return content.trim();
-    }
-  );
+  // MySQL version comments are handled earlier in the conversion process
 
   // Convert DEFAULT CHARACTER SET declarations
   convertedSQL = convertedSQL.replace(
@@ -562,17 +546,23 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     }
   );
 
-  // Handle COLLATE declarations
+  // Handle COLLATE declarations (only in CREATE/ALTER TABLE context)
   convertedSQL = convertedSQL.replace(
     /COLLATE\s+utf8_general_ci/gi,
-    (match) => {
+    (match, offset, str) => {
+      // Only apply within CREATE/ALTER TABLE contexts to avoid corrupting INSERT data
+      const beforeMatch = str.substring(Math.max(0, offset - 500), offset);
+      if (!/CREATE\s+TABLE|ALTER\s+TABLE/i.test(beforeMatch)) {
+        return match; // Don't modify if not in DDL context
+      }
+      
       const lineNumber = getLineNumber(sqlContent, match);
       const replacement = "COLLATE utf8mb4_general_ci";
       issues.push({
         lineNumber,
         issueType: "info",
         category: "compatibility",
-        description: "Updated collation to utf8mb4_general_ci for MariaDB 10.3 compatibility",
+        description: "Updated collation to utf8mb4_general_ci for MariaDB 10.3 compatibility (DDL only)",
         originalText: match,
         convertedText: replacement,
         autoFixed: true
@@ -583,17 +573,99 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     }
   );
 
-  // Handle MySQL-specific UNIQUE KEY syntax
+  // Handle MySQL-specific plain KEY syntax only (preserve PRIMARY, UNIQUE, FULLTEXT, SPATIAL)
   convertedSQL = convertedSQL.replace(
-    /UNIQUE\s+KEY\s+([^\s(]+)\s*\(([^)]+)\)/gi,
-    (match, keyName, columns) => {
+    /^\s*(PRIMARY\s+KEY|UNIQUE\s+KEY|FULLTEXT\s+KEY|SPATIAL\s+KEY|KEY)\s+([^\s(]*)\s*\(([^)]+)\)/gim,
+    (match, keyType, keyName, columns, offset, str) => {
+      // Only modify plain KEY, preserve all other key types
+      if (keyType.toUpperCase() !== 'KEY') {
+        return match; // Keep PRIMARY KEY, UNIQUE KEY, FULLTEXT KEY, SPATIAL KEY as is
+      }
+      
+      // Check if we're inside a CREATE TABLE context
+      const beforeMatch = str.substring(Math.max(0, offset - 500), offset);
+      if (!/CREATE\s+TABLE/i.test(beforeMatch)) {
+        return match; // Don't modify if not in CREATE TABLE context
+      }
+      
       const lineNumber = getLineNumber(sqlContent, match);
-      const replacement = `UNIQUE KEY \`${keyName.replace(/[`'"]/g, '')}\` (${columns})`;
+      const cleanKeyName = keyName ? keyName.replace(/[`'"]/g, '') : '';
+      const replacement = `  KEY \`${cleanKeyName}\` (${columns})`;
+      
       issues.push({
         lineNumber,
         issueType: "info",
         category: "compatibility",
-        description: "Ensured UNIQUE KEY syntax is MariaDB compatible",
+        description: "Ensured plain KEY syntax is MariaDB compatible (preserved all constraint types)",
+        originalText: match.trim(),
+        convertedText: replacement.trim(),
+        autoFixed: true
+      });
+      stats.optimizationsCount++;
+      stats.autoFixed++;
+      return replacement;
+    }
+  );
+
+  // Fix data encoding issues for special characters and colors
+  convertedSQL = convertedSQL.replace(
+    /CHARACTER\s+SET\s+utf8\s+COLLATE\s+utf8_general_ci/gi,
+    (match) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      const replacement = "CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci";
+      issues.push({
+        lineNumber,
+        issueType: "warning",
+        category: "compatibility",
+        description: "Upgraded character set to utf8mb4 for full unicode support (emojis, colors, special characters)",
+        originalText: match,
+        convertedText: replacement,
+        autoFixed: true
+      });
+      stats.warningsCount++;
+      stats.autoFixed++;
+      return replacement;
+    }
+  );
+
+  // Fix any remaining charset issues in table definitions
+  convertedSQL = convertedSQL.replace(
+    /DEFAULT\s+CHARSET\s*=\s*utf8\b(?!\s*mb4)/gi,
+    (match) => {
+      const lineNumber = getLineNumber(sqlContent, match);
+      const replacement = "DEFAULT CHARSET=utf8mb4";
+      issues.push({
+        lineNumber,
+        issueType: "warning",
+        category: "compatibility",
+        description: "Fixed charset to utf8mb4 for complete data compatibility (colors, emojis, special text)",
+        originalText: match,
+        convertedText: replacement,
+        autoFixed: true
+      });
+      stats.warningsCount++;
+      stats.autoFixed++;
+      return replacement;
+    }
+  );
+
+  // Handle JSON column data to ensure proper encoding (preserve all constraints)
+  convertedSQL = convertedSQL.replace(
+    /(`[^`]+`)\s+(json)(\b[^,)]*)/gi,
+    (match, columnName, dataType, trailing, offset, str) => {
+      // Only apply within CREATE TABLE contexts
+      const beforeMatch = str.substring(Math.max(0, offset - 300), offset);
+      if (!/CREATE\s+TABLE/i.test(beforeMatch)) {
+        return match; // Don't modify if not in CREATE TABLE context
+      }
+      
+      const lineNumber = getLineNumber(sqlContent, match);
+      const replacement = `${columnName} longtext COLLATE utf8mb4_bin${trailing}`;
+      issues.push({
+        lineNumber,
+        issueType: "info",
+        category: "compatibility",
+        description: "Converted JSON column to longtext with binary collation for MariaDB 10.3 compatibility (preserved all constraints)",
         originalText: match,
         convertedText: replacement,
         autoFixed: true
@@ -604,17 +676,80 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     }
   );
 
-  // Handle MySQL-specific KEY syntax
+  // Fix text field encodings for maximum compatibility (only in CREATE TABLE context)
   convertedSQL = convertedSQL.replace(
-    /(?<!UNIQUE\s)KEY\s+([^\s(]+)\s*\(([^)]+)\)/gi,
-    (match, keyName, columns) => {
+    /\b(text|longtext|mediumtext|tinytext)\b(?!\w)(\s+CHARACTER\s+SET\s+\w+)?(\s+COLLATE\s+[\w_]+)?/gi,
+    (match, textType, charsetPart, collatePart, offset, str) => {
+      // Only apply within CREATE TABLE contexts to avoid corrupting data
+      const beforeMatch = str.substring(Math.max(0, offset - 300), offset);
+      if (!/CREATE\s+TABLE/i.test(beforeMatch)) {
+        return match; // Don't modify if not in CREATE TABLE context
+      }
+      
+      if (!charsetPart || !charsetPart.includes('utf8mb4')) {
+        const lineNumber = getLineNumber(sqlContent, match);
+        const replacement = `${textType} CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci`;
+        issues.push({
+          lineNumber,
+          issueType: "info",
+          category: "optimization",
+          description: "Ensured text field uses utf8mb4 for complete data support (all characters, colors, formatting)",
+          originalText: match,
+          convertedText: replacement,
+          autoFixed: true
+        });
+        stats.optimizationsCount++;
+        stats.autoFixed++;
+        return replacement;
+      }
+      return match;
+    }
+  );
+
+  // Ensure varchar fields support full character range (only in CREATE TABLE context)
+  convertedSQL = convertedSQL.replace(
+    /\bvarchar\((\d+)\)(?!\s+CHARACTER\s+SET\s+utf8mb4)/gi,
+    (match, length, offset, str) => {
+      // Only apply within CREATE TABLE contexts to avoid corrupting data
+      const beforeMatch = str.substring(Math.max(0, offset - 300), offset);
+      if (!/CREATE\s+TABLE/i.test(beforeMatch)) {
+        return match; // Don't modify if not in CREATE TABLE context
+      }
+      
       const lineNumber = getLineNumber(sqlContent, match);
-      const replacement = `KEY \`${keyName.replace(/[`'"]/g, '')}\` (${columns})`;
+      const replacement = `varchar(${length}) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci`;
+      issues.push({
+        lineNumber,
+        issueType: "info",
+        category: "optimization",
+        description: "Enhanced varchar field to support all characters including colors and special formatting",
+        originalText: match,
+        convertedText: replacement,
+        autoFixed: true
+      });
+      stats.optimizationsCount++;
+      stats.autoFixed++;
+      return replacement;
+    }
+  );
+
+  // Fix any remaining encoding issues (only in CREATE/ALTER TABLE context)
+  convertedSQL = convertedSQL.replace(
+    /COLLATE\s+utf8_unicode_ci/gi,
+    (match, offset, str) => {
+      // Only apply within CREATE/ALTER TABLE contexts to avoid corrupting INSERT data
+      const beforeMatch = str.substring(Math.max(0, offset - 500), offset);
+      if (!/CREATE\s+TABLE|ALTER\s+TABLE/i.test(beforeMatch)) {
+        return match; // Don't modify if not in DDL context
+      }
+      
+      const lineNumber = getLineNumber(sqlContent, match);
+      const replacement = "COLLATE utf8mb4_unicode_ci";
       issues.push({
         lineNumber,
         issueType: "info",
         category: "compatibility",
-        description: "Ensured KEY syntax is MariaDB compatible",
+        description: "Updated collation to utf8mb4_unicode_ci for enhanced data compatibility (DDL only)",
         originalText: match,
         convertedText: replacement,
         autoFixed: true
@@ -629,10 +764,14 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
   convertedSQL = convertedSQL.replace(/\n\s*\n\s*\n/g, '\n\n'); // Remove triple+ newlines
   convertedSQL = convertedSQL.replace(/^\s*\n/gm, ''); // Remove empty lines at start
   
-  // Ensure proper SQL file header for MariaDB compatibility
+  // Ensure proper SQL file header for MariaDB compatibility with full data support
   if (!convertedSQL.includes('SET NAMES utf8mb4')) {
     const header = `-- MariaDB 10.3 Compatible SQL Export
-SET NAMES utf8mb4;
+-- Optimized for ALL data types including colors, emojis, special characters
+SET NAMES utf8mb4 COLLATE utf8mb4_general_ci;
+SET character_set_client = utf8mb4;
+SET character_set_connection = utf8mb4;
+SET character_set_results = utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 SET AUTOCOMMIT = 0;
