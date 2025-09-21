@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface AnalysisSectionProps {
   jobId: string;
@@ -42,6 +42,11 @@ export default function AnalysisSection({ jobId }: AnalysisSectionProps) {
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate and refetch the job data to show updated results
+      queryClient.invalidateQueries({
+        queryKey: ['/api/convert', jobId]
+      });
+      
       toast({
         title: "Analysis completed",
         description: "Your SQL file has been successfully analyzed and converted.",
