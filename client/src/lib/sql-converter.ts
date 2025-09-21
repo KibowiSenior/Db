@@ -36,64 +36,66 @@ export async function convertMySQLToMariaDB(sqlContent: string): Promise<Convers
     optimizationsCount: 0
   };
 
-  // Replace MySQL 8.0+ collations with MariaDB 10.3 compatible equivalents - COMPLETE MAPPING
+  // Replace MySQL 8.0+ collations with MariaDB 10.3 compatible equivalents - PRESERVE CASE SENSITIVITY
   const mysqlCollationMap = {
-    // MySQL 8.0 utf8mb4 collations
-    'utf8mb4_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_0900_as_ci': 'utf8mb4_unicode_ci', 
-    'utf8mb4_0900_as_cs': 'utf8mb4_unicode_ci',
-    'utf8mb4_0900_bin': 'utf8mb4_bin',
-    // Additional MySQL 8.0+ collations missing from original
+    // MySQL 8.0 utf8mb4 collations - PRESERVE CASE SENSITIVITY FOR DATA INTEGRITY
+    'utf8mb4_0900_ai_ci': 'utf8mb4_unicode_ci',     // Case insensitive -> case insensitive
+    'utf8mb4_0900_as_ci': 'utf8mb4_unicode_ci',     // Case insensitive -> case insensitive
+    'utf8mb4_0900_as_cs': 'utf8mb4_bin',            // Case sensitive -> case sensitive (CRITICAL)
+    'utf8mb4_0900_bin': 'utf8mb4_bin',              // Binary -> binary
+    
+    // Case-sensitive collations - MAP TO utf8mb4_bin TO PRESERVE SEMANTICS
     'utf8mb4_cs_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_cs_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_cs_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_da_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_da_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_da_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_de_pb_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_de_pb_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_de_pb_0900_as_cs': 'utf8mb4_bin',      // Case sensitive -> case sensitive
     'utf8mb4_eo_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_eo_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_eo_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_es_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_es_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_es_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_es_trad_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_es_trad_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_es_trad_0900_as_cs': 'utf8mb4_bin',    // Case sensitive -> case sensitive
     'utf8mb4_et_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_et_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_et_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_hr_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_hr_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_hr_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_hu_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_hu_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_hu_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_is_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_is_0900_as_cs': 'utf8mb4_unicode_ci',
-    'utf8mb4_ja_0900_as_cs': 'utf8mb4_unicode_ci',
-    'utf8mb4_ja_0900_as_cs_ks': 'utf8mb4_unicode_ci',
+    'utf8mb4_is_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
+    'utf8mb4_ja_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
+    'utf8mb4_ja_0900_as_cs_ks': 'utf8mb4_bin',      // Case sensitive -> case sensitive
     'utf8mb4_la_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_la_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_la_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_lt_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_lt_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_lt_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_lv_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_lv_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_lv_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_pl_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_pl_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_pl_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_ro_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_ro_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_ro_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_ru_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_ru_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_ru_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_sk_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_sk_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_sk_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_sl_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_sl_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_sl_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_sv_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_sv_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_sv_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_tr_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_tr_0900_as_cs': 'utf8mb4_unicode_ci',
+    'utf8mb4_tr_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
     'utf8mb4_vi_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8mb4_vi_0900_as_cs': 'utf8mb4_unicode_ci',
-    'utf8mb4_zh_0900_as_cs': 'utf8mb4_unicode_ci',
-    // UTF8 MySQL 8.0 collations (also convert to utf8mb4)
-    'utf8_0900_ai_ci': 'utf8mb4_unicode_ci',
-    'utf8_0900_as_ci': 'utf8mb4_unicode_ci',
-    'utf8_0900_as_cs': 'utf8mb4_unicode_ci',
-    'utf8_0900_bin': 'utf8mb4_bin'
+    'utf8mb4_vi_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
+    'utf8mb4_zh_0900_as_cs': 'utf8mb4_bin',         // Case sensitive -> case sensitive
+    
+    // UTF8 MySQL 8.0 collations (also convert to utf8mb4 with proper case sensitivity)
+    'utf8_0900_ai_ci': 'utf8mb4_unicode_ci',        // Case insensitive -> case insensitive
+    'utf8_0900_as_ci': 'utf8mb4_unicode_ci',        // Case insensitive -> case insensitive
+    'utf8_0900_as_cs': 'utf8mb4_bin',               // Case sensitive -> case sensitive (CRITICAL)
+    'utf8_0900_bin': 'utf8mb4_bin'                  // Binary -> binary
   };
 
   Object.entries(mysqlCollationMap).forEach(([mysqlCollation, mariadbCollation]) => {
