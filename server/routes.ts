@@ -78,10 +78,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Update job with converted content and completion status
-      await storage.updateConversionJob(jobId, {
+      const updatedJob = await storage.updateConversionJob(jobId, {
         status: "completed",
         convertedContent: conversionResult.convertedSQL,
         completedAt: new Date()
+      });
+
+      console.log(`Job ${jobId} updated to completed status:`, {
+        jobStatus: updatedJob?.status,
+        hasConvertedContent: !!updatedJob?.convertedContent,
+        completedAt: updatedJob?.completedAt
       });
 
       res.json({ 
@@ -107,6 +113,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const issues = await storage.getConversionIssues(jobId);
       const stats = await storage.getConversionStats(jobId);
+
+      console.log(`Getting job ${jobId}:`, {
+        status: job.status,
+        hasConvertedContent: !!job.convertedContent,
+        completedAt: job.completedAt
+      });
 
       res.json({
         job,
