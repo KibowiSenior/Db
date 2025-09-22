@@ -80,7 +80,7 @@ export default function Converter() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              © 2025 SQL Converter Tool. Built for database migration professionals.
+              © SENIOR 2025 SQL Converter Tool. Built for database migration professionals.
             </div>
             <div className="flex items-center space-x-6 text-sm text-muted-foreground">
               <a href="#" className="hover:text-foreground transition-colors">Documentation</a>
