@@ -186,14 +186,6 @@ CREATE TABLE products (
 
 ### Common Issues
 1. **Port already in use**: The application runs on port 5000 by default. Make sure no other application is using this port.
-2. **TypeScript errors**: Run `npm run check` to identify and fix type issues.
-3. **Database connection**: If using persistent storage, ensure your PostgreSQL database is running and accessible.
-4. **File upload issues**: Ensure uploaded files are valid SQL format and not corrupted.
+2. **File upload issues**: Ensure uploaded files are valid SQL format and not corrupted.
 
-## Development Notes
-
-- The application uses in-memory storage by default for development
-- Hot reload is enabled for both frontend and backend code
-- Vite handles the frontend build process
-- Express serves both API routes and static assets
-- TypeScript compilation is handled by `tsx` for development
+## BYEBYE
