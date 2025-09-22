@@ -13,7 +13,7 @@ This is a full-stack web application that converts MySQL SQL files to MariaDB 10
 - **Auto-Fix Engine**: Automatically resolves common compatibility issues
 - **Line-by-Line Analysis**: Precise error reporting with line number tracking
 
-### 📊 Analysis & Reporting
+###  Analysis & Reporting
 - **Detailed Issue Detection**: Categorized issue detection (syntax, compatibility, optimization)
 - **Conversion Statistics**: Tracks total issues, auto-fixes, warnings, errors, and optimizations
 - **Validation Reports**: Comprehensive reports on conversion results
